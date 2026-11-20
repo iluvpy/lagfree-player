@@ -172,11 +172,16 @@ function renderDetected() {
   queue.id = "queue";
   queue.append(iconSpan("plus"), document.createTextNode("Queue"));
   queue.addEventListener("click", () => queueCurrent(queue));
+  const download = make("button", "btn subtle");
+  download.type = "button";
+  download.id = "download";
+  download.append(iconSpan("download"), document.createTextNode("Download"));
+  download.addEventListener("click", () => openDownload());
   const copy = make("button", "btn subtle");
   copy.type = "button";
   copy.append(iconSpan("copy"), document.createTextNode("Copy link"));
   copy.addEventListener("click", () => copyCurrent());
-  split.append(queue, copy);
+  split.append(queue, download, copy);
   content.append(split);
 
   const another = make("button", "text-link");
@@ -362,7 +367,12 @@ function openCurrent() {
   openVideo(state.video, state.meta);
 }
 
-async function openVideo(video, meta, { button = null } = {}) {
+function openDownload() {
+  if (!state.video) return;
+  openVideo(state.video, state.meta, { download: true });
+}
+
+async function openVideo(video, meta, { button = null, download = false } = {}) {
   if (!video || !video.id || state.opening) return;
   state.opening = true;
   if (button) {
@@ -376,6 +386,7 @@ async function openVideo(video, meta, { button = null } = {}) {
     type: "open-player",
     video: { id: video.id, start: Number(video.start) || 0 },
     meta: meta?.title ? { title: meta.title, author: meta.author || "" } : null,
+    download: Boolean(download),
   };
 
   let opened = false;
@@ -388,7 +399,7 @@ async function openVideo(video, meta, { button = null } = {}) {
 
   if (!opened) {
     try {
-      const url = playerUrl(video);
+      const url = playerUrl(video, "", Boolean(download));
       if (chrome?.tabs?.create) await chrome.tabs.create({ url });
       else window.location.href = url;
       opened = true;
@@ -411,7 +422,7 @@ async function openVideo(video, meta, { button = null } = {}) {
   toast("Couldn’t open the player. Try again.", "bad");
 }
 
-function playerUrl(video, view = "") {
+function playerUrl(video, view = "", download = false) {
   const base = chrome.runtime.getURL("player/player.html");
   const url = new URL(base);
   if (video?.id) {
@@ -419,6 +430,7 @@ function playerUrl(video, view = "") {
     if (Number(video.start) > 0) url.searchParams.set("t", String(Math.floor(video.start)));
   }
   if (view) url.searchParams.set("view", view);
+  if (download) url.searchParams.set("download", "1");
   return url.toString();
 }
 

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "LagFree — Smooth YouTube Player",
   "short_name": "LagFree",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A lightweight Discord-dark YouTube player that pre-buffers, forces H.264, and caps quality to keep playback smooth.",
   "minimum_chrome_version": "111",
   "icons": {
@@ -25,7 +25,8 @@
     "storage",
     "tabs",
     "contextMenus",
-    "declarativeNetRequestWithHostAccess"
+    "declarativeNetRequestWithHostAccess",
+    "nativeMessaging"
   ],
   "host_permissions": [
     "https://www.youtube.com/*",

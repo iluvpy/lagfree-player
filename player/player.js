@@ -22,11 +22,20 @@ import {
   normalizeSettings,
 } from "../shared/settings.js";
 import { fetchVideoMeta } from "../shared/meta.js";
+import { getStored } from "../shared/storage.js";
 import { YTPlayer } from "./yt-bridge.js";
 
 const BUFFER_TARGET = 30;
-const VIEWS = new Set(["player", "queue", "history", "settings"]);
-const VIEW_LABELS = { player: "Player", queue: "Queue", history: "History", settings: "Settings" };
+const VIEWS = new Set(["player", "queue", "downloads", "history", "settings"]);
+const VIEW_LABELS = { player: "Player", queue: "Queue", downloads: "Downloads", history: "History", settings: "Settings" };
+const DOWNLOAD_QUALITY_LABELS = {
+  1080: "1080p MP4",
+  720: "720p MP4",
+  best: "Best (MKV)",
+  audio: "Audio only",
+};
+const ACTIVE_DOWNLOAD_STATUSES = new Set(["starting", "downloading", "processing", "cancelling"]);
+const TERMINAL_DOWNLOAD_STATUSES = new Set(["complete", "error", "cancelled", "interrupted"]);
 
 const $ = (id) => document.getElementById(id);
 
@@ -88,6 +97,7 @@ const el = {
   miniSub: $("mini-sub"),
   miniEq: $("mini-eq"),
   btnQueue: $("btn-queue"),
+  btnDownload: $("btn-download"),
   btnCopy: $("btn-copy"),
   btnOpenYt: $("btn-open-yt"),
   btnOpenYt2: $("btn-open-yt-2"),
@@ -126,6 +136,39 @@ const el = {
   aboutVersion: $("about-version"),
   queueCount: $("queue-count"),
   railQueueCount: $("rail-queue-count"),
+  downloadCount: $("download-count"),
+  railDownloadCount: $("rail-download-count"),
+  downloadsCurrent: $("downloads-current"),
+  downloadsClear: $("downloads-clear"),
+  downloadList: $("download-list"),
+  topDownload: $("top-download"),
+  topDownloadText: $("top-download-text"),
+  helperBanner: $("download-helper"),
+  helperTitle: $("helper-title"),
+  helperPill: $("helper-pill"),
+  helperDot: $("helper-dot"),
+  helperPillText: $("helper-pill-text"),
+  helperText: $("helper-text"),
+  helperCommand: $("helper-command"),
+  helperTest: $("helper-test"),
+  helperCopy: $("helper-copy"),
+  settingsHelper: $("settings-helper"),
+  settingsHelperDot: $("settings-helper-dot"),
+  settingsHelperText: $("settings-helper-text"),
+  settingsHelperTest: $("settings-helper-test"),
+  settingsHelperCopy: $("settings-helper-copy"),
+  settingsClearDownloads: $("settings-clear-downloads"),
+  settingsOpenDownloads: $("settings-open-downloads"),
+  downloadModal: $("download-modal"),
+  downloadThumb: $("download-thumb"),
+  downloadTitle: $("download-title"),
+  downloadAuthor: $("download-author"),
+  downloadOptions: $("download-options"),
+  downloadHelperLine: $("download-helper-line"),
+  downloadHelperDot: $("download-helper-dot"),
+  downloadHelperLineText: $("download-helper-line-text"),
+  downloadStart: $("download-start"),
+  downloadStartText: $("download-start-text"),
   queueClear: $("queue-clear"),
   queueList: $("queue-list"),
   queueForm: $("queue-form"),
@@ -156,6 +199,12 @@ const state = {
   settings: null,
   queue: [],
   history: [],
+  downloads: [],
+  downloadHelper: { status: "unknown", info: null, error: "", checkedAt: 0 },
+  helperChecking: false,
+  downloadModalOpen: false,
+  downloadStarting: false,
+  pendingDownloadModal: false,
   video: null,
   meta: null,
   player: null,
@@ -210,14 +259,20 @@ async function init() {
   el.aboutVersion.textContent = `v${version}`;
 
   try {
-    const [settings, lib] = await Promise.all([getSettings(), loadHistoryAndQueue()]);
+    const [settings, lib, storedDownloads] = await Promise.all([
+      getSettings(),
+      loadHistoryAndQueue(),
+      getStored("downloads"),
+    ]);
     state.settings = settings;
     state.history = lib.history;
     state.queue = lib.queue;
+    state.downloads = Array.isArray(storedDownloads.downloads) ? storedDownloads.downloads : [];
   } catch {
     state.settings = normalizeSettings({});
     state.history = [];
     state.queue = [];
+    state.downloads = [];
   }
 
   applyReduceMotion();
@@ -228,6 +283,9 @@ async function init() {
   updateActionButtons();
   updateVideoUI();
   updateVolumeUI(state.settings.volume, state.settings.muted);
+  updateDownloadUI();
+  renderDownloads();
+  updateHelperUI();
   updateClock();
   renderQueue();
   renderHistory();
@@ -239,6 +297,7 @@ async function init() {
   scheduleRender();
 
   const params = new URLSearchParams(location.search);
+  const wantsDownload = params.get("download") === "1";
   const parsed = parseVideo(params.get("video") || "");
   if (parsed) {
     const start = params.get("t") ? Math.max(0, Number(params.get("t")) || 0) : parsed.start || 0;
@@ -261,6 +320,10 @@ async function init() {
     showEmpty();
   }
 
+  if (wantsDownload && state.video) {
+    setTimeout(() => openDownloadModal(), 120);
+  }
+
   setInterval(updateClock, 1000);
   setInterval(sampleLag, 1000);
   document.addEventListener("visibilitychange", () => {
@@ -273,6 +336,7 @@ async function init() {
   try {
     chrome.runtime?.onMessage?.addListener((message) => {
       if (message?.type === "switch-view" && VIEWS.has(message.view)) switchView(message.view);
+      if (message?.type === "open-download") openDownloadModal();
     });
   } catch {
     /* not running as an extension page */
@@ -990,9 +1054,10 @@ function updateVideoUI() {
 function updateActionButtons() {
   const hasVideo = Boolean(state.video);
   const ready = state.ready;
-  for (const button of [el.btnQueue, el.btnCopy, el.btnOpenYt, el.btnOpenYt2, el.btnReload, el.btnReload2]) {
+  for (const button of [el.btnQueue, el.btnDownload, el.btnCopy, el.btnOpenYt, el.btnOpenYt2, el.btnReload, el.btnReload2]) {
     button.disabled = !hasVideo;
   }
+  if (el.downloadsCurrent) el.downloadsCurrent.disabled = !hasVideo;
   el.btnPlay.disabled = !hasVideo || !ready || Boolean(state.stageError);
   el.btnQuality.disabled = !hasVideo;
   el.btnMute.disabled = !hasVideo;
@@ -1608,6 +1673,7 @@ function updateQueueCount() {
 function updateCounts() {
   updateQueueCount();
   el.historyClear.disabled = state.history.length === 0;
+  updateDownloadUI();
 }
 
 function updateUpNext() {
@@ -1664,6 +1730,571 @@ function relative(timestamp) {
   return new Date(Number(timestamp)).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+
+/* ================================================================== */
+/* Downloads                                                          */
+/* ================================================================== */
+
+function isActiveDownload(job) {
+  return Boolean(job && ACTIVE_DOWNLOAD_STATUSES.has(job.status));
+}
+
+function isTerminalDownload(job) {
+  return Boolean(job && TERMINAL_DOWNLOAD_STATUSES.has(job.status));
+}
+
+function downloadStatusLabel(status) {
+  return {
+    starting: "Starting",
+    downloading: "Downloading",
+    processing: "Processing",
+    cancelling: "Cancelling",
+    complete: "Complete",
+    error: "Failed",
+    cancelled: "Cancelled",
+    interrupted: "Interrupted",
+  }[status] || "Unknown";
+}
+
+async function clearFinishedDownloads() {
+  try {
+    const result = await chrome.runtime.sendMessage({ type: "downloads-clear" });
+    if (result?.ok) {
+      await refreshDownloads();
+      toast("Finished downloads cleared from the list.", "good");
+    } else {
+      toast(result?.error || "Could not clear finished downloads.", "bad");
+    }
+  } catch {
+    toast("Could not reach the extension background service.", "bad");
+  }
+}
+
+function updateDownloadUI() {
+  const active = state.downloads.filter(isActiveDownload);
+  const terminal = state.downloads.filter(isTerminalDownload);
+  for (const node of [el.downloadCount, el.railDownloadCount]) {
+    if (!node) continue;
+    node.textContent = String(active.length);
+    node.hidden = active.length === 0;
+  }
+  if (el.downloadsClear) el.downloadsClear.disabled = terminal.length === 0;
+  if (el.settingsClearDownloads) el.settingsClearDownloads.disabled = terminal.length === 0;
+
+  if (!el.topDownload) return;
+  if (!active.length) {
+    el.topDownload.hidden = true;
+    return;
+  }
+  const job = active[0];
+  el.topDownload.hidden = false;
+  if (active.length > 1) {
+    el.topDownloadText.textContent = `${active.length} downloads`;
+  } else if (job.status === "processing") {
+    el.topDownloadText.textContent = "Merging video…";
+  } else if (job.status === "starting") {
+    el.topDownloadText.textContent = "Starting download…";
+  } else if (job.status === "cancelling") {
+    el.topDownloadText.textContent = "Cancelling…";
+  } else {
+    el.topDownloadText.textContent = `Downloading ${Math.round(Number(job.percent) || 0)}%`;
+  }
+  updateActionButtons();
+}
+
+function renderDownloads() {
+  if (!el.downloadList) return;
+  const list = el.downloadList;
+  list.replaceChildren();
+  const sorted = [...state.downloads].sort((a, b) => {
+    const activeA = isActiveDownload(a) ? 1 : 0;
+    const activeB = isActiveDownload(b) ? 1 : 0;
+    if (activeA !== activeB) return activeB - activeA;
+    return (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0);
+  });
+
+  if (!sorted.length) {
+    const empty = emptyList(
+      "download",
+      "No downloads yet",
+      "Choose Download under the player or from the popup. Files are written to ~/Downloads/LagFree on this device and never uploaded."
+    );
+    if (state.video) {
+      const button = document.createElement("button");
+      button.className = "btn subtle";
+      button.type = "button";
+      button.append(iconNode("download"), document.createTextNode("Download current video"));
+      button.addEventListener("click", openDownloadModal);
+      empty.append(button);
+    }
+    list.append(empty);
+    paintIcons(list);
+    updateDownloadUI();
+    return;
+  }
+
+  for (const job of sorted) list.append(createDownloadRow(job));
+  paintIcons(list);
+  updateDownloadUI();
+}
+
+function createDownloadRow(job) {
+  const row = document.createElement("div");
+  row.className = "download-row";
+
+  const thumb = document.createElement("img");
+  thumb.className = "download-thumb";
+  thumb.alt = "";
+  thumb.loading = "lazy";
+  thumb.referrerPolicy = "no-referrer";
+  thumb.src = job.thumbnail || thumbnailUrl(job.videoId, "mqdefault");
+  thumb.addEventListener("error", () => {
+    thumb.style.visibility = "hidden";
+  });
+
+  const copy = document.createElement("div");
+  copy.className = "download-copy";
+  const title = document.createElement("span");
+  title.className = "download-title";
+  title.textContent = job.title || "YouTube video";
+  const sub = document.createElement("span");
+  sub.className = "download-sub";
+  const quality = job.qualityLabel || DOWNLOAD_QUALITY_LABELS[job.quality] || "Video";
+  sub.textContent = `${quality} · ${job.author || "YouTube"}`;
+  copy.append(title, sub);
+
+  if (isActiveDownload(job)) {
+    const bar = document.createElement("div");
+    bar.className = "download-bar";
+    const fill = document.createElement("span");
+    fill.style.width = `${clamp(Number(job.percent) || 0, 0, 100)}%`;
+    bar.append(fill);
+    const meta = document.createElement("div");
+    meta.className = "download-meta";
+    const left = document.createElement("span");
+    left.textContent = job.stage || downloadStatusLabel(job.status);
+    const right = document.createElement("span");
+    const percent = `${Math.round(Number(job.percent) || 0)}%`;
+    const speed = job.speed > 0 ? formatSpeed(job.speed) : "";
+    const eta = Number.isFinite(Number(job.eta)) && Number(job.eta) > 0 ? `ETA ${formatEta(job.eta)}` : "";
+    right.textContent = [percent, speed, eta].filter(Boolean).join(" · ");
+    meta.append(left, right);
+    copy.append(bar, meta);
+  } else if (job.status === "complete") {
+    if (job.path) {
+      const path = document.createElement("div");
+      path.className = "download-path";
+      path.textContent = shortPath(job.path);
+      path.title = job.path;
+      copy.append(path);
+    }
+    const meta = document.createElement("div");
+    meta.className = "download-meta";
+    const left = document.createElement("span");
+    left.textContent = job.filesize ? formatBytes(job.filesize) : "Saved";
+    const right = document.createElement("span");
+    right.textContent = job.createdAt ? relative(job.createdAt) : "";
+    meta.append(left, right);
+    copy.append(meta);
+  } else {
+    if (job.error) {
+      const error = document.createElement("div");
+      error.className = "download-error";
+      error.textContent = job.error;
+      copy.append(error);
+    }
+    const meta = document.createElement("div");
+    meta.className = "download-meta";
+    const left = document.createElement("span");
+    left.textContent = job.createdAt ? relative(job.createdAt) : "";
+    const right = document.createElement("span");
+    right.textContent = "";
+    meta.append(left, right);
+    copy.append(meta);
+  }
+
+  const actions = document.createElement("div");
+  actions.className = "download-actions";
+  const statePill = document.createElement("span");
+  statePill.className = `download-state ${job.status}`;
+  const stateDot = document.createElement("span");
+  stateDot.className = "dot";
+  const stateText = document.createElement("span");
+  stateText.textContent = downloadStatusLabel(job.status);
+  statePill.append(stateDot, stateText);
+  actions.append(statePill);
+
+  if (isActiveDownload(job)) {
+    actions.append(
+      downloadAction("x", "Cancel download", () => cancelDownloadJob(job.id), { danger: true })
+    );
+  } else if (job.status === "complete") {
+    if (job.path) {
+      actions.append(downloadAction("folder", "Show in folder", () => openDownloadFolder(job.path)));
+      actions.append(downloadAction("copy", "Copy path", () => copyText(job.path, "Download path copied")));
+    }
+    actions.append(downloadAction("trash", "Remove from list", () => removeDownloadJob(job.id), { danger: true }));
+  } else {
+    actions.append(downloadAction("refresh", "Try again", () => retryDownloadJob(job)));
+    actions.append(downloadAction("trash", "Remove from list", () => removeDownloadJob(job.id), { danger: true }));
+  }
+
+  row.append(thumb, copy, actions);
+  return row;
+}
+
+function downloadAction(iconName, title, handler, { danger = false } = {}) {
+  const button = document.createElement("button");
+  button.className = `media-action${danger ? " danger" : ""}`;
+  button.type = "button";
+  button.title = title;
+  button.setAttribute("aria-label", title);
+  button.append(iconNode(iconName));
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    handler();
+  });
+  return button;
+}
+
+async function cancelDownloadJob(jobId) {
+  try {
+    const result = await chrome.runtime.sendMessage({ type: "download-cancel", jobId });
+    if (result?.ok) {
+      toast("Cancelling download…");
+      await refreshDownloads();
+    } else {
+      toast(result?.error || "Could not cancel the download.", "bad");
+    }
+  } catch {
+    toast("Could not reach the downloader helper.", "bad");
+  }
+}
+
+async function removeDownloadJob(jobId) {
+  try {
+    const result = await chrome.runtime.sendMessage({ type: "download-remove", jobId });
+    if (result?.ok) {
+      await refreshDownloads();
+    } else {
+      toast(result?.error || "Could not remove the download.", "bad");
+    }
+  } catch {
+    toast("Could not reach the downloader helper.", "bad");
+  }
+}
+
+async function retryDownloadJob(job) {
+  try {
+    const result = await chrome.runtime.sendMessage({
+      type: "download-start",
+      videoId: job.videoId,
+      title: job.title,
+      author: job.author,
+      thumbnail: job.thumbnail,
+      quality: job.quality,
+    });
+    if (result?.ok) {
+      await removeDownloadJob(job.id);
+      toast("Download restarted.", "good");
+      await refreshDownloads();
+    } else {
+      toast(result?.error || "Could not restart the download.", "bad");
+    }
+  } catch {
+    toast("Could not reach the downloader helper.", "bad");
+  }
+}
+
+async function openDownloadFolder(path) {
+  try {
+    const result = await chrome.runtime.sendMessage({ type: "download-open-folder", path });
+    if (!result?.ok) toast(result?.error || "Could not open the folder.", "bad");
+  } catch {
+    toast("Could not reach the downloader helper.", "bad");
+  }
+}
+
+async function refreshDownloads() {
+  try {
+    const stored = await getStored("downloads");
+    state.downloads = Array.isArray(stored.downloads) ? stored.downloads : [];
+  } catch {
+    state.downloads = [];
+  }
+  updateDownloadUI();
+  if (state.view === "downloads") renderDownloads();
+  if (state.downloadModalOpen) updateDownloadStartState();
+}
+
+function formatBytes(value) {
+  const n = Number(value) || 0;
+  if (n <= 0) return "0 B";
+  if (n < 1024) return `${Math.round(n)} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let v = n / 1024;
+  let index = 0;
+  while (v >= 1024 && index < units.length - 1) {
+    v /= 1024;
+    index += 1;
+  }
+  return `${v >= 10 ? Math.round(v) : v.toFixed(1)} ${units[index]}`;
+}
+
+function formatSpeed(value) {
+  const n = Number(value) || 0;
+  return n > 0 ? `${formatBytes(n)}/s` : "";
+}
+
+function formatEta(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return "";
+  if (n < 60) return `${Math.round(n)}s`;
+  const minutes = Math.floor(n / 60);
+  const seconds = Math.round(n % 60);
+  return `${minutes}m ${seconds}s`;
+}
+
+function shortPath(path) {
+  return String(path || "")
+    .replace(/^\/home\/[^/]+/, "~")
+    .replace(/^\/Users\/[^/]+/, "~");
+}
+
+async function copyText(text, successMessage = "Copied") {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    try {
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.append(area);
+      area.select();
+      document.execCommand("copy");
+      area.remove();
+    } catch {
+      toast("Copy failed", "bad");
+      return;
+    }
+  }
+  toast(successMessage, "good");
+}
+
+/* ---------------- Download modal ---------------- */
+
+function openDownloadModal() {
+  if (!state.video) {
+    toast("Load a video first, then download it.", "busy");
+    return;
+  }
+  state.downloadModalOpen = true;
+  el.downloadModal.hidden = false;
+  closeQualityMenu();
+  el.shortcutsModal.hidden = true;
+
+  el.downloadThumb.src = state.meta?.thumbnail || thumbnailUrl(state.video.id, "mqdefault");
+  el.downloadThumb.onerror = () => {
+    el.downloadThumb.style.visibility = "hidden";
+  };
+  el.downloadThumb.style.visibility = "";
+  el.downloadTitle.textContent = state.meta?.title || "YouTube video";
+  el.downloadAuthor.textContent = state.meta?.author || "YouTube";
+
+  const preferred = DOWNLOAD_QUALITY_LABELS[state.settings?.downloadQuality]
+    ? state.settings.downloadQuality
+    : "1080";
+  selectDownloadQuality(preferred);
+  updateDownloadStartState();
+  updateHelperUI();
+  syncUrl();
+  if (
+    state.downloadHelper.status === "unknown" ||
+    Date.now() - (state.downloadHelper.checkedAt || 0) > 60_000
+  ) {
+    void checkDownloader();
+  }
+}
+
+function closeDownloadModal() {
+  state.downloadModalOpen = false;
+  el.downloadModal.hidden = true;
+}
+
+function selectDownloadQuality(value) {
+  const radios = el.downloadOptions.querySelectorAll('input[name="download-quality"]');
+  radios.forEach((radio) => {
+    const selected = radio.value === value;
+    radio.checked = selected;
+    radio.closest(".download-option")?.classList.toggle("selected", selected);
+  });
+  state.selectedDownloadQuality = value;
+  updateDownloadStartState();
+}
+
+function selectedDownloadQuality() {
+  const checked = el.downloadOptions.querySelector('input[name="download-quality"]:checked');
+  return checked?.value || "1080";
+}
+
+function updateDownloadStartState() {
+  if (!el.downloadStart) return;
+  const canStart =
+    state.downloadHelper.status === "ready" &&
+    Boolean(state.video) &&
+    !state.downloadStarting;
+  el.downloadStart.disabled = !canStart;
+  el.downloadStartText.textContent = state.downloadStarting ? "Starting…" : "Download";
+}
+
+async function startDownloadNow() {
+  if (state.downloadStarting) return;
+  if (!state.video) {
+    toast("Load a video first.", "busy");
+    return;
+  }
+  if (state.downloadHelper.status !== "ready") {
+    toast("Install the downloader helper first. See Downloads for the setup command.", "bad");
+    return;
+  }
+  const quality = selectedDownloadQuality();
+  state.downloadStarting = true;
+  updateDownloadStartState();
+  let result = null;
+  try {
+    result = await chrome.runtime.sendMessage({
+      type: "download-start",
+      videoId: state.video.id,
+      title: state.meta?.title || "",
+      author: state.meta?.author || "",
+      thumbnail: state.meta?.thumbnail || "",
+      quality,
+    });
+  } catch {
+    result = { ok: false, error: "Could not reach the extension background service." };
+  }
+  state.downloadStarting = false;
+  if (!result?.ok) {
+    updateDownloadStartState();
+    el.downloadHelperLineText.textContent = result?.error || "Could not start the download.";
+    el.downloadHelperDot.className = "dot red";
+    toast(result?.error || "Could not start the download.", "bad");
+    void checkDownloader({ force: true });
+    return;
+  }
+  try {
+    state.settings = await saveSettings({ downloadQuality: quality });
+    syncSettingsUI();
+  } catch {
+    /* the download already started; remembering the choice is best-effort */
+  }
+  closeDownloadModal();
+  toast("Download started — check Downloads.", "good");
+  await refreshDownloads();
+  updateDownloadUI();
+}
+
+function updateHelperUI() {
+  const helper = state.downloadHelper;
+  const status = state.helperChecking ? "checking" : helper.status;
+  const ready = status === "ready";
+  const missing = status === "missing";
+
+  el.helperBanner.classList.toggle("ready", ready);
+  el.helperBanner.classList.toggle("missing", missing);
+  el.helperPill.className = `helper-pill${ready ? " ready" : missing ? " missing" : ""}`;
+  el.helperPillText.textContent = ready ? "Ready" : missing ? "Not installed" : status === "checking" ? "Checking…" : "Not checked";
+  el.helperTitle.textContent = ready ? "Downloader helper ready" : missing ? "Downloader helper missing" : "Downloader helper";
+
+  if (ready) {
+    const version = helper.info?.ytdlp ? `yt-dlp ${helper.info.ytdlp}` : "yt-dlp";
+    const ffmpeg = helper.info?.ffmpeg ? "ffmpeg ready" : "ffmpeg missing";
+    el.helperText.textContent = `Local downloads are ready · ${version} · ${ffmpeg}. Output: ~/Downloads/LagFree.`;
+    el.helperCommand.hidden = true;
+  } else if (missing) {
+    el.helperText.textContent = helper.error || "The local helper is not installed or not reachable. Run the setup command once, then check again.";
+    el.helperCommand.hidden = false;
+  } else if (status === "checking") {
+    el.helperText.textContent = "Checking the local yt-dlp + ffmpeg helper…";
+    el.helperCommand.hidden = false;
+  } else {
+    el.helperText.textContent = "Downloads use a local yt-dlp + ffmpeg helper. It runs on this computer only and never uploads anything.";
+    el.helperCommand.hidden = false;
+  }
+
+  const dotTone = ready ? "green" : missing ? "red" : "yellow";
+  el.settingsHelperDot.className = `dot ${dotTone}`;
+  el.settingsHelperText.textContent = ready
+    ? `Helper ready${helper.info?.ytdlp ? ` · yt-dlp ${helper.info.ytdlp}` : ""}`
+    : missing
+      ? "Helper not installed — copy the setup command"
+      : "Helper not checked";
+  el.settingsHelper.className = "settings-helper";
+
+  updateDownloadModalHelper();
+  updateDownloadStartState();
+}
+
+function updateDownloadModalHelper() {
+  if (!el.downloadHelperLine) return;
+  const helper = state.downloadHelper;
+  const status = state.helperChecking ? "checking" : helper.status;
+  if (status === "ready") {
+    el.downloadHelperDot.className = "dot green";
+    el.downloadHelperLineText.textContent = `Helper ready${helper.info?.ytdlp ? ` · yt-dlp ${helper.info.ytdlp}` : ""}`;
+  } else if (status === "missing") {
+    el.downloadHelperDot.className = "dot red";
+    el.downloadHelperLineText.textContent = helper.error || "Helper not installed — run companion/setup.sh.";
+  } else if (status === "checking") {
+    el.downloadHelperDot.className = "dot yellow";
+    el.downloadHelperLineText.textContent = "Checking the downloader helper…";
+  } else {
+    el.downloadHelperDot.className = "dot yellow";
+    el.downloadHelperLineText.textContent = "Downloader helper not checked.";
+  }
+}
+
+async function checkDownloader({ force = false, notify = false } = {}) {
+  if (state.helperChecking) return;
+  const age = Date.now() - (state.downloadHelper.checkedAt || 0);
+  if (!force && state.downloadHelper.status !== "unknown" && age < 30_000) {
+    updateHelperUI();
+    return;
+  }
+  state.helperChecking = true;
+  updateHelperUI();
+  let result = null;
+  try {
+    result = await chrome.runtime.sendMessage({ type: "downloader-test" });
+  } catch {
+    result = { ok: false, error: "Could not reach the extension background service." };
+  }
+  state.helperChecking = false;
+  const ready = result?.ok === true && result?.ffmpeg !== false;
+  state.downloadHelper = ready
+    ? { status: "ready", info: result, error: "", checkedAt: Date.now() }
+    : {
+        status: "missing",
+        info: result || null,
+        error: result?.error || "The downloader helper is not available.",
+        checkedAt: Date.now(),
+      };
+  updateHelperUI();
+  if (notify) {
+    if (ready) toast(`Downloader helper ready${result.ytdlp ? ` · yt-dlp ${result.ytdlp}` : ""}.`, "good");
+    else toast(state.downloadHelper.error, "bad");
+  }
+}
+
+function setupCommand() {
+  return "bash ~/my_extensions/lagfree-player/companion/setup.sh";
+}
+
+function copySetupCommand() {
+  void copyText(setupCommand(), "Setup command copied");
+}
+
 /* ================================================================== */
 /* Views + URL                                                        */
 /* ================================================================== */
@@ -1680,6 +2311,14 @@ function switchView(view, { updateUrl = true } = {}) {
   el.crumb.textContent = VIEW_LABELS[view] || "Player";
   if (view === "queue") renderQueue();
   if (view === "history") renderHistory();
+  if (view === "downloads") renderDownloads();
+  if (
+    (view === "downloads" || view === "settings") &&
+    (state.downloadHelper.status === "unknown" ||
+      Date.now() - (state.downloadHelper.checkedAt || 0) > 60_000)
+  ) {
+    void checkDownloader();
+  }
   if (view === "settings") syncSettingsUI();
   if (view === "player") scheduleRender();
   closeQualityMenu();
@@ -1701,6 +2340,7 @@ function syncUrl() {
   else url.searchParams.delete("view");
   url.searchParams.delete("title");
   url.searchParams.delete("author");
+  url.searchParams.delete("download");
   try {
     window.history.replaceState(null, "", url.toString());
   } catch {
@@ -1776,6 +2416,25 @@ function bindEvents() {
       start: state.startAt,
     });
   });
+  el.btnDownload.addEventListener("click", openDownloadModal);
+  el.downloadsCurrent.addEventListener("click", openDownloadModal);
+  el.topDownload.addEventListener("click", () => switchView("downloads"));
+  el.helperTest.addEventListener("click", () => checkDownloader({ force: true, notify: true }));
+  el.helperCopy.addEventListener("click", copySetupCommand);
+  el.settingsHelperTest.addEventListener("click", () => checkDownloader({ force: true, notify: true }));
+  el.settingsHelperCopy.addEventListener("click", copySetupCommand);
+  el.settingsOpenDownloads.addEventListener("click", () => switchView("downloads"));
+  el.settingsClearDownloads.addEventListener("click", clearFinishedDownloads);
+  el.downloadsClear.addEventListener("click", clearFinishedDownloads);
+  document.querySelectorAll("[data-close-download]").forEach((node) => {
+    node.addEventListener("click", closeDownloadModal);
+  });
+  el.downloadOptions.querySelectorAll('input[name="download-quality"]').forEach((radio) => {
+    radio.addEventListener("change", () => {
+      if (radio.checked) selectDownloadQuality(radio.value);
+    });
+  });
+  el.downloadStart.addEventListener("click", startDownloadNow);
   el.btnCopy.addEventListener("click", copyCurrentLink);
   el.btnOpenYt.addEventListener("click", openOnYouTube);
   el.btnOpenYt2.addEventListener("click", openOnYouTube);
@@ -2156,6 +2815,10 @@ function onKeyDown(event) {
       resolveConfirm(false);
       return;
     }
+    if (state.downloadModalOpen) {
+      closeDownloadModal();
+      return;
+    }
     if (!el.shortcutsModal.hidden) {
       closeModals();
       return;
@@ -2166,7 +2829,7 @@ function onKeyDown(event) {
     }
   }
 
-  if (!el.confirmModal.hidden || !el.shortcutsModal.hidden) return;
+  if (!el.confirmModal.hidden || !el.shortcutsModal.hidden || state.downloadModalOpen) return;
 
   const target = event.target;
   const tag = target?.tagName;
@@ -2192,6 +2855,12 @@ function onKeyDown(event) {
   if (event.key === "?") {
     event.preventDefault();
     openShortcuts();
+    return;
+  }
+
+  if (event.key.toLowerCase() === "d") {
+    event.preventDefault();
+    switchView("downloads");
     return;
   }
 
@@ -2350,6 +3019,27 @@ function bindStorageSync() {
       state.history = Array.isArray(changes.history.newValue) ? changes.history.newValue : [];
       updateCounts();
       if (state.view === "history") renderHistory();
+    }
+    if (changes.downloads) {
+      const previous = new Map(state.downloads.map((job) => [job.id, job.status]));
+      state.downloads = Array.isArray(changes.downloads.newValue) ? changes.downloads.newValue : [];
+      updateDownloadUI();
+      if (state.view === "downloads") renderDownloads();
+      if (state.downloadModalOpen) updateDownloadStartState();
+      for (const job of state.downloads) {
+        const oldStatus = previous.get(job.id);
+        if (!oldStatus || !ACTIVE_DOWNLOAD_STATUSES.has(oldStatus)) continue;
+        if (!TERMINAL_DOWNLOAD_STATUSES.has(job.status)) continue;
+        if (job.status === "complete") {
+          toast(`Download complete: ${job.title || "video"}`, "good");
+        } else if (job.status === "error") {
+          toast(`Download failed: ${String(job.error || "unknown error").slice(0, 140)}`, "bad");
+        } else if (job.status === "interrupted") {
+          toast("Download was interrupted.", "bad");
+        } else if (job.status === "cancelled") {
+          toast("Download cancelled.", "busy");
+        }
+      }
     }
     if (changes.settings?.newValue) {
       state.settings = normalizeSettings(changes.settings.newValue);

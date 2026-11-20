@@ -67,6 +67,9 @@ export const ICONS = {
   'battery': stroke('<rect x="2.5" y="7.5" width="17" height="9" rx="2.2"/><path d="M22 10.5v3"/><rect x="5" y="10" width="6" height="4" rx="1" fill="currentColor" stroke="none"/>'),
   'layers': stroke('<path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 12 9 5 9-5"/><path d="m3 16 9 5 9-5"/>'),
   'alert': stroke('<path d="M12 3.5 2.8 20h18.4L12 3.5z"/><path d="M12 9v5M12 17h.01"/>'),
+  download: stroke('<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4.5 20.5h15"/>'),
+  folder: stroke('<path d="M3 7.5A2.5 2.5 0 0 1 5.5 5h3.8l2 2.5h7.2A2.5 2.5 0 0 1 21 10v7a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17V7.5z"/>'),
+  'hard-drive': stroke('<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M7 15h.01M11 15h.01"/><path d="M6 9h12"/>'),
 };
 
 export function icon(name) {

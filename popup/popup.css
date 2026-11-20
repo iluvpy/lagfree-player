@@ -332,18 +332,19 @@ body {
 
 .split {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
   margin-top: 7px;
   animation: lf-rise 300ms 80ms ease both;
 }
 .split .btn {
   min-height: 38px;
+  padding: 0 8px;
   background: rgba(255, 255, 255, 0.045);
   border: 1px solid var(--line-faint);
   color: var(--text-3);
   font-weight: 600;
-  font-size: 12px;
+  font-size: 11px;
 }
 .split .btn:hover {
   background: rgba(255, 255, 255, 0.075);

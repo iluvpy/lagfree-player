@@ -1,46 +1,90 @@
-# LagFree — Smooth YouTube Player (AI generated)
+# LagFree — Smooth YouTube Player
 
-A Discord-dark Chrome/Brave extension that takes the video you are already watching and opens it in a lean, pre-buffered player page.
+A Discord-dark Chrome/Brave extension that takes the video you are already watching and opens it in a lean, pre-buffered player page — with an optional **private download** feature powered by a local helper.
 
-The popup detects the current YouTube video. Click **Open LagFree Player** and a local extension page loads the video in YouTube's lightweight embedded player, with a custom shell, play queue, history, quality cap, H.264 boost and a lag guard.
+The popup detects the current YouTube video. **Open LagFree Player** loads it in YouTube's lightweight embedded player with a custom shell, play queue, history, quality cap, H.264 boost and a lag guard. **Download** saves a local copy through the companion helper.
 
-> LagFree is a **pre-buffer + lightweight player**, not a video downloader. Browser extensions cannot legally or technically download YouTube streams. It gives YouTube's own stream a head start, removes the watch-page weight, and reduces decode work. See [Why not download?](#why-not-download-the-video).
+> LagFree is not affiliated with YouTube or Google. The download feature is intended only for content you have the rights to save, for private viewing. It does not bypass DRM or ads, and it never uploads your files anywhere.
 
 ---
 
-## Install (Chrome, Brave, Edge)
+## Install the extension
 
 1. Open `chrome://extensions` (Brave: `brave://extensions`).
 2. Enable **Developer mode** (top-right).
-3. Click **Load unpacked** and choose this folder:
+3. Click **Load unpacked** and choose:
    `~/my_extensions/lagfree-player`
 4. Pin **LagFree** to the toolbar.
 5. Open any YouTube video, click the LagFree icon, then **Open LagFree Player**.
 
 Keyboard shortcut: `Alt+Shift+L` opens the current YouTube video in LagFree.
 
-> If you move the folder, reload the extension from `chrome://extensions`. The extension must be loaded unpacked — do not drag the ZIP into Chrome.
+> If you move the folder, reload the extension and re-run the download helper setup (the extension id changes). The extension must be loaded unpacked — do not drag the ZIP into Chrome.
+
+---
+
+## Set up downloads (Linux / macOS)
+
+Downloads require a small local helper. It uses **yt-dlp** and **ffmpeg**, runs only when you start a download, and writes files to `~/Downloads/LagFree`.
+
+Requirements: Python 3 and ffmpeg. The script installs/updates yt-dlp in its own venv.
+
+```bash
+bash ~/my_extensions/lagfree-player/companion/setup.sh
+```
+
+Then reload LagFree from `chrome://extensions` / `brave://extensions`. If the helper still is not found, restart the browser once so it picks up the new native-host manifest.
+
+The setup script:
+
+- creates `~/.local/share/lagfree/venv` and installs the latest `yt-dlp`;
+- checks for `ffmpeg` and warns if it is missing;
+- makes the helper executable;
+- writes native-messaging manifests for Chrome, Chromium, Brave and Edge under your user config;
+- computes the extension ID from this folder automatically (override with `--extension-id ID` if needed).
+
+To remove the native-host registration later:
+
+```bash
+bash ~/my_extensions/lagfree-player/companion/setup.sh --uninstall
+```
+
+Files already downloaded are not touched.
+
+> The setup script covers Linux and macOS. A Windows install would additionally need the native host registered in the registry.
 
 ---
 
 ## What it does
 
-- **Lightweight embed** — uses YouTube's `/embed/` player instead of the full watch page (no comments, recommendations, feed or heavy page scripts).
-- **Pre-buffer** — plays the first few seconds muted so the initial stream has a head start; then pauses at the beginning and lets you start cleanly.
-- **H.264 boost** — asks YouTube for H.264 instead of VP9/AV1, which is much easier to decode on older CPUs/GPUs.
-- **Quality cap** — defaults to 720p. Quality can be changed live from the player or the popup.
-- **Lag guard** — samples playback progress; if it detects repeated stalls it drops one quality step automatically.
-- **Queue & history** — both stored locally in the extension.
-- **Custom Discord-dark shell** — player, inspector, queue, history, settings, keyboard shortcuts and a popup that matches.
-- **Works on video pages, Shorts and live URLs** (live behaviour varies).
+### Player
+- **Lightweight embed** — YouTube's `/embed/` player instead of the full watch page.
+- **Pre-buffer** — plays the opening seconds muted to build a head start, then pauses at the beginning.
+- **H.264 boost** — asks YouTube for H.264 instead of VP9/AV1, which is easier to decode on older CPUs/GPUs.
+- **Quality cap** — defaults to 720p; change it live from the player or popup.
+- **Lag guard** — detects repeated stalls and drops a quality step automatically.
+- **Queue & history** — stored locally in the extension.
+- **Downloads** — separate active/completed list with progress, cancel, retry and open-folder actions.
 
-Keyboard shortcuts in the player: `Space/K` play, `←/→` seek 5s, `J/L` seek 10s, `↑/↓` volume, `M` mute, `F` fullscreen, `P` prime, `R` reload, `0–9` jump, `?` shortcuts.
+### Downloads
+- Download from the **Download** button under the player, the popup, or the Downloads view.
+- Quality choices:
+  - **1080p · MP4** — H.264 + AAC, best compatibility (default)
+  - **720p · MP4** — smaller H.264 copy
+  - **Best available · MKV** — highest resolution, any codec
+  - **Audio only · M4A**
+- Progress shows the current stream, speed and ETA, then switches to “Merging audio + video”.
+- Files are written by the helper to `~/Downloads/LagFree`.
+- Cancel removes partial files. “Clear finished” removes entries from the list only; files stay in the folder.
+- All processing is local. No account, server or upload.
+
+Keyboard shortcuts in the player: `Space/K` play, `←/→` seek 5s, `J/L` seek 10s, `↑/↓` volume, `M` mute, `F` fullscreen, `P` prime, `R` reload, `D` downloads, `0–9` jump, `?` shortcuts.
 
 ---
 
 ## Why the referrer rule?
 
-Since late 2025 YouTube's embedded player rejects requests that do not carry a valid HTTP `Referer` (errors **152/153**). Chrome extension pages do not send a normal referrer, so an embed from a `chrome-extension://` page is refused.
+Since late 2025 YouTube's embedded player rejects requests without a valid HTTP `Referer` (errors **152/153**). Chrome extension pages do not send a referrer, so an embed from a `chrome-extension://` page is refused.
 
 LagFree includes a scoped `declarativeNetRequest` rule (`rules.json`) that sets
 
@@ -48,35 +92,25 @@ LagFree includes a scoped `declarativeNetRequest` rule (`rules.json`) that sets
 Referer: https://example.com
 ```
 
-only for requests whose URL contains `lagfree=1` — i.e. only LagFree's own YouTube embeds. This is the same kind of workaround used by other embed players. It does not modify requests for other websites or other YouTube pages, and it is not used to bypass ads.
+only for requests whose URL contains `lagfree=1` — i.e. only LagFree's own YouTube embeds. It does not alter other websites' embeds or other YouTube pages, and it is not used to bypass ads.
 
-If YouTube changes this policy, playback may fail with 152/153. Try reloading the extension from `chrome://extensions` and then reloading the player tab.
-
-The `origin` passed to the embed is the extension's own origin, so the IFrame postMessage API continues to work between the player page and the embed.
+If YouTube changes this policy, playback may fail with 152/153. Reload the extension and the player tab.
 
 ---
 
-## Why not download the video?
+## Why the helper?
 
-YouTube streams are protected by signed URLs and are not available to an extension as a normal downloadable file. A real download needs external tooling (e.g. yt-dlp) and raises YouTube Terms of Service issues. LagFree instead:
+Browser extensions cannot turn YouTube's signed, segmented streams into a normal saveable file by themselves. The helper does the extraction and muxing locally with yt-dlp + ffmpeg. It supports high-quality video and audio, reliable cancellation and correct file output.
 
-1. starts YouTube's own stream early (pre-buffer),
-2. keeps only the lightweight embed page,
-3. forces a cheaper codec and a 720p cap,
-4. detects stalls and steps quality down.
+The helper is **not** a server. It is a native messaging process launched by the browser only for a download or a quick health check. The extension and helper communicate over Chrome's native-messaging pipe, and the native-host manifest only allows this extension ID.
 
-That combination is what removes the usual causes of stutter on an older laptop.
+### What it does not do
 
-**Ad blockers are probably not the main cause.** The full YouTube watch page is heavy, and VP9/AV1 decoding can overwhelm older hardware. Ad blocking does not normally throttle playback intentionally. H.264 boost and the 720p cap target the hardware path; the lean embed avoids the page-weight path.
-
----
-
-## Privacy
-
-- Video IDs, titles, queue, history and settings are stored only in `chrome.storage.local` on your machine.
-- The only network requests the extension makes are to YouTube: the embed itself and YouTube's public oEmbed endpoint (for video titles/channels).
-- There is no account, analytics, telemetry or remote server.
-- The header rule only sets a generic referrer for LagFree's own embed requests.
+- No DRM-protected content.
+- No ads bypass.
+- No live recording.
+- No uploading, telemetry or accounts.
+- No guarantee for private, members-only or age-gated videos; those may need yt-dlp cookies, which this UI does not configure.
 
 ---
 
@@ -84,13 +118,28 @@ That combination is what removes the usual causes of stutter on an older laptop.
 
 | Symptom | Try |
 | --- | --- |
-| Error 152 / 153 | Reload the extension and the player tab. Make sure the extension is enabled. |
-| Still stuttering | Use 720p/480p, keep **Force H.264** on, close other tabs, check hardware acceleration. |
+| “Helper not installed” | Run `bash ~/my_extensions/lagfree-player/companion/setup.sh`, reload the extension, then restart the browser if needed. |
+| Extension id forbidden | You moved the extension or loaded a different copy. Re-run setup from the current folder, or pass `--extension-id ID`. |
+| ffmpeg missing | Install it (e.g. `sudo apt install ffmpeg`) and click **Check helper**. |
+| yt-dlp too old | Re-run setup; it updates the venv. |
+| Download fails | Read the error in Downloads. Retry; for unavailable/private videos, open on YouTube. |
+| Error 152 / 153 | Reload the extension and player tab. Make sure the referrer rule is enabled. |
+| Still stuttering | Use 720p/480p, keep Force H.264 on, close other tabs, check hardware acceleration. |
 | Autoplay blocked | Click the big play button. Browsers block unmuted autoplay. |
-| No sound | Click the speaker icon; some streams start muted if **Start muted** is enabled. |
+| No sound | Click the speaker icon; check **Start muted** in Settings. |
 | Video unavailable | The owner may not allow embedding. Use **Open on YouTube**. |
-| H.264 causes an error | Turn **Force H.264** off in Settings, then press `R` or reload the player. |
-| Settings view while playing | Switching views keeps the video playing; `Alt+Shift+L` or the popup returns to the player. |
+| H.264 causes an error | Turn **Force H.264** off in Settings, then press `R` or reload. |
+| Settings/History while playing | Switching views in place keeps playback alive. |
+
+---
+
+## Privacy
+
+- Video IDs, titles, queue, history, downloads list and settings live in `chrome.storage.local`.
+- The extension talks to YouTube (embed + oEmbed metadata) and to the local helper over native messaging.
+- The helper talks to YouTube for the download and writes to `~/Downloads/LagFree`.
+- No account, analytics, telemetry or remote server.
+- The header rule only sets a generic referrer for LagFree's own embed requests.
 
 ---
 
@@ -98,18 +147,23 @@ That combination is what removes the usual causes of stutter on an older laptop.
 
 ```
 manifest.json          MV3 manifest
-background.js          context menus, command, player-tab routing
+background.js          menus, command, player routing, download jobs
 rules.json             scoped referrer rule for YouTube embeds
-popup/                 toolbar popup (detect video, open/queue/copy)
+popup/                 toolbar popup (detect, open, queue, download, copy)
 player/                the custom site:
-  player.html/css/js   shell, views, controls, queue/history/settings
+  player.html/css/js   shell, views, controls, queue/history/downloads/settings
   yt-bridge.js         postMessage bridge to the YouTube embed
-  codec-guard.js       H.264 nudge (runs only in LagFree embeds)
+  codec-guard.js       H.264 nudge (LagFree embeds only)
+  embed-scope.js       marks LagFree's embed for scoped CSS
   embed.css            hides the embed's own chrome
+companion/
+  setup.sh             installs native host + yt-dlp venv
+  run.sh               native messaging launcher
+  lagfree_downloader.py  yt-dlp progress/cancel/open-folder host
 shared/                theme, icons, settings, storage, utilities
 icons/                 toolbar icons
 ```
 
 Bundled font: **Inter** (SIL Open Font License 1.1). See `shared/INTER-LICENSE.txt`.
 
-Not affiliated with YouTube or Google.
+Version 1.1.0 — not affiliated with YouTube or Google.

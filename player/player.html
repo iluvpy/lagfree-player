@@ -23,6 +23,10 @@
             <span data-icon="queue"></span>
             <span class="rail-count" id="rail-queue-count" hidden>0</span>
           </button>
+          <button class="rail-btn" type="button" data-view="downloads" data-tooltip="Downloads" aria-label="Downloads">
+            <span data-icon="download"></span>
+            <span class="rail-count" id="rail-download-count" hidden>0</span>
+          </button>
           <button class="rail-btn" type="button" data-view="history" data-tooltip="History" aria-label="History">
             <span data-icon="history"></span>
           </button>
@@ -56,6 +60,9 @@
           </button>
           <button class="side-item" type="button" data-view="queue">
             <span data-icon="queue"></span><span>Queue</span><span class="side-badge" id="queue-count">0</span>
+          </button>
+          <button class="side-item" type="button" data-view="downloads">
+            <span data-icon="download"></span><span>Downloads</span><span class="side-badge" id="download-count" hidden>0</span>
           </button>
           <button class="side-item" type="button" data-view="history">
             <span data-icon="history"></span><span>History</span>
@@ -103,6 +110,10 @@
             <span class="crumb-current" id="crumb">Player</span>
           </div>
           <div class="top-actions">
+            <button class="top-download" id="top-download" type="button" hidden>
+              <span class="spinner"></span>
+              <span id="top-download-text">Downloading 0%</span>
+            </button>
             <span class="top-status" id="top-status"><span class="dot" id="top-dot"></span><span id="top-status-text">Idle</span></span>
             <button class="btn ghost icon" type="button" id="btn-help" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts"><span data-icon="keyboard"></span></button>
             <button class="btn ghost icon" type="button" id="btn-open-yt" title="Open on YouTube" aria-label="Open on YouTube" disabled><span data-icon="external"></span></button>
@@ -226,6 +237,7 @@
                   <p class="now-sub"><span id="now-author">Paste a YouTube link to begin</span><span class="sep">·</span><span id="now-id">—</span></p>
                 </div>
                 <div class="now-actions">
+                  <button class="btn subtle" type="button" id="btn-download" disabled><span data-icon="download"></span>Download</button>
                   <button class="btn subtle" type="button" id="btn-queue" disabled><span data-icon="plus"></span>Queue</button>
                   <button class="btn ghost icon" type="button" id="btn-copy" title="Copy link" aria-label="Copy link" disabled><span data-icon="copy"></span></button>
                   <button class="btn ghost icon" type="button" id="btn-open-yt-2" title="Open on YouTube" aria-label="Open on YouTube" disabled><span data-icon="external"></span></button>
@@ -275,6 +287,42 @@
               <button class="btn ghost" type="button" id="history-clear"><span data-icon="trash"></span>Clear history</button>
             </div>
             <div class="media-list" id="history-list"></div>
+          </section>
+
+
+          <section class="view" data-view="downloads" id="view-downloads" hidden>
+            <div class="view-head">
+              <div>
+                <span class="eyebrow accent">LIBRARY</span>
+                <h1>Downloads</h1>
+                <p>Saved privately on this device by the local helper. Nothing is uploaded.</p>
+              </div>
+              <div class="view-actions">
+                <button class="btn ghost" type="button" id="downloads-clear" disabled><span data-icon="trash"></span>Clear finished</button>
+                <button class="btn primary" type="button" id="downloads-current"><span data-icon="download"></span>Download current video</button>
+              </div>
+            </div>
+
+            <div class="helper-banner" id="download-helper">
+              <div class="helper-mark" data-icon="download"></div>
+              <div class="helper-copy">
+                <div class="helper-title-row">
+                  <b id="helper-title">Downloader helper</b>
+                  <span class="helper-pill" id="helper-pill"><span class="dot" id="helper-dot"></span><span id="helper-pill-text">Not checked</span></span>
+                </div>
+                <p id="helper-text">Downloads require the local yt-dlp + ffmpeg helper. It runs on this computer only.</p>
+                <div class="helper-command" id="helper-command">
+                  <span data-icon="folder"></span>
+                  <code>bash ~/my_extensions/lagfree-player/companion/setup.sh</code>
+                </div>
+              </div>
+              <div class="helper-actions">
+                <button class="btn subtle" type="button" id="helper-test"><span data-icon="refresh"></span>Check helper</button>
+                <button class="btn ghost icon" type="button" id="helper-copy" title="Copy setup command" aria-label="Copy setup command"><span data-icon="copy"></span></button>
+              </div>
+            </div>
+
+            <div class="download-list" id="download-list"></div>
           </section>
 
           <section class="view" data-view="settings" id="view-settings" hidden>
@@ -365,6 +413,36 @@
                   <span class="switch-label">Remember history</span>
                 </label>
                 <p class="row-note">Only video IDs, titles and timestamps, stored in this browser.</p>
+              </section>
+
+
+              <section class="card settings-card">
+                <div class="card-head">
+                  <div><h2>Downloads</h2><p>Local helper, private files</p></div>
+                  <span class="card-icon" data-icon="download"></span>
+                </div>
+                <label class="select-row">
+                  <span>Default quality</span>
+                  <select data-setting="downloadQuality">
+                    <option value="1080">1080p MP4</option>
+                    <option value="720">720p MP4</option>
+                    <option value="best">Best (MKV)</option>
+                    <option value="audio">Audio only</option>
+                  </select>
+                </label>
+                <p class="row-note">Files are written to <code>~/Downloads/LagFree</code> on this device, never uploaded.</p>
+                <div class="settings-helper" id="settings-helper">
+                  <span class="dot" id="settings-helper-dot"></span>
+                  <span id="settings-helper-text">Helper not checked</span>
+                </div>
+                <div class="data-actions">
+                  <button class="btn subtle" type="button" id="settings-helper-test"><span data-icon="refresh"></span>Check helper</button>
+                  <button class="btn subtle" type="button" id="settings-helper-copy"><span data-icon="copy"></span>Copy setup</button>
+                </div>
+                <div class="data-actions">
+                  <button class="btn subtle" type="button" id="settings-clear-downloads"><span data-icon="trash"></span>Clear finished</button>
+                  <button class="btn subtle" type="button" id="settings-open-downloads"><span data-icon="folder"></span>Open downloads</button>
+                </div>
               </section>
 
               <section class="card settings-card">
@@ -499,9 +577,71 @@
           <div><span>Prime buffer</span><span><kbd>P</kbd></span></div>
           <div><span>Reload video</span><span><kbd>R</kbd></span></div>
           <div><span>Open queue / history</span><span><kbd>Q</kbd><kbd>H</kbd></span></div>
+          <div><span>Open downloads</span><span><kbd>D</kbd></span></div>
           <div><span>Shortcuts</span><span><kbd>?</kbd></span></div>
         </div>
         <p class="modal-note">Shortcuts are paused while you are typing in a field.</p>
+      </div>
+    </div>
+
+
+    <div class="modal" id="download-modal" hidden>
+      <div class="modal-scrim" data-close-download></div>
+      <div class="modal-card download-modal">
+        <header class="modal-head">
+          <div><span class="eyebrow accent">SAVE FOR LATER</span><h2>Download video</h2></div>
+          <button class="btn ghost icon" type="button" data-close-download aria-label="Close"><span data-icon="x"></span></button>
+        </header>
+
+        <div class="download-preview">
+          <img id="download-thumb" alt="" />
+          <div class="download-preview-copy">
+            <b id="download-title">YouTube video</b>
+            <span id="download-author">YouTube</span>
+          </div>
+        </div>
+
+        <div class="download-options" id="download-options">
+          <label class="download-option">
+            <input type="radio" name="download-quality" value="1080" />
+            <span class="dl-radio"></span>
+            <span class="dl-copy"><b>1080p · MP4</b><small>H.264 + AAC, best compatibility</small></span>
+            <span class="dl-tag">Recommended</span>
+          </label>
+          <label class="download-option">
+            <input type="radio" name="download-quality" value="720" />
+            <span class="dl-radio"></span>
+            <span class="dl-copy"><b>720p · MP4</b><small>Smaller file, H.264 + AAC</small></span>
+          </label>
+          <label class="download-option">
+            <input type="radio" name="download-quality" value="best" />
+            <span class="dl-radio"></span>
+            <span class="dl-copy"><b>Best available · MKV</b><small>Highest resolution, any codec</small></span>
+            <span class="dl-tag muted">Largest</span>
+          </label>
+          <label class="download-option">
+            <input type="radio" name="download-quality" value="audio" />
+            <span class="dl-radio"></span>
+            <span class="dl-copy"><b>Audio only · M4A</b><small>No video · smallest</small></span>
+          </label>
+        </div>
+
+        <div class="download-dest">
+          <span data-icon="folder"></span>
+          <div><small>Save to</small><code>~/Downloads/LagFree</code></div>
+        </div>
+
+        <div class="download-helper-line" id="download-helper-line">
+          <span class="dot" id="download-helper-dot"></span>
+          <span id="download-helper-line-text">Checking the downloader helper…</span>
+        </div>
+
+        <p class="download-legal">Download only content you have the rights to. Files stay on this device.</p>
+
+        <div class="modal-actions">
+          <button class="btn subtle" type="button" data-close-download>Cancel</button>
+          <button class="btn primary" type="button" id="download-start" disabled><span data-icon="download"></span><span id="download-start-text">Download</span></button>
+        </div>
       </div>
     </div>
 
