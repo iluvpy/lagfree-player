@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>LagFree — Smooth YouTube Player</title>
+    <link rel="icon" href="../icons/icon32.png" />
+    <link rel="stylesheet" href="../shared/theme.css" />
+    <link rel="stylesheet" href="player.css" />
+  </head>
+  <body>
+    <div class="app" id="app">
+      <aside class="rail" aria-label="Primary navigation">
+        <button class="rail-logo" id="rail-logo" type="button" title="LagFree player" aria-label="LagFree player">
+          <span data-icon="logo"></span>
+        </button>
+        <nav class="rail-nav">
+          <button class="rail-btn active" type="button" data-view="player" data-tooltip="Player" aria-label="Player">
+            <span data-icon="monitor"></span>
+          </button>
+          <button class="rail-btn" type="button" data-view="queue" data-tooltip="Queue" aria-label="Queue">
+            <span data-icon="queue"></span>
+            <span class="rail-count" id="rail-queue-count" hidden>0</span>
+          </button>
+          <button class="rail-btn" type="button" data-view="history" data-tooltip="History" aria-label="History">
+            <span data-icon="history"></span>
+          </button>
+          <button class="rail-btn" type="button" data-view="settings" data-tooltip="Settings" aria-label="Settings">
+            <span data-icon="settings"></span>
+          </button>
+        </nav>
+        <div class="rail-spacer"></div>
+        <button class="rail-btn" type="button" id="rail-help" data-tooltip="Shortcuts" aria-label="Keyboard shortcuts">
+          <span data-icon="keyboard"></span>
+        </button>
+        <div class="rail-avatar" title="Local-first player">LF</div>
+      </aside>
+
+      <aside class="sidebar" aria-label="Library">
+        <div class="side-brand">
+          <div class="side-brand-line">LagFree <span class="beta">BETA</span></div>
+          <p>Smooth playback, zero clutter</p>
+        </div>
+
+        <form class="side-search" id="side-form">
+          <span data-icon="search" aria-hidden="true"></span>
+          <input id="side-input" type="text" placeholder="Paste a YouTube link…" autocomplete="off" spellcheck="false" aria-label="YouTube link" />
+          <button type="submit" id="side-load" aria-label="Load link"><span data-icon="arrow-right"></span></button>
+        </form>
+
+        <div class="side-label">Workspace</div>
+        <nav class="side-nav">
+          <button class="side-item active" type="button" data-view="player">
+            <span data-icon="monitor"></span><span>Player</span><kbd>1</kbd>
+          </button>
+          <button class="side-item" type="button" data-view="queue">
+            <span data-icon="queue"></span><span>Queue</span><span class="side-badge" id="queue-count">0</span>
+          </button>
+          <button class="side-item" type="button" data-view="history">
+            <span data-icon="history"></span><span>History</span>
+          </button>
+          <button class="side-item" type="button" data-view="settings">
+            <span data-icon="settings"></span><span>Settings</span>
+          </button>
+        </nav>
+
+        <div class="side-label">Now playing</div>
+        <div class="mini" id="mini">
+          <div class="mini-thumb">
+            <img id="mini-thumb" alt="" />
+            <span class="mini-fallback" data-icon="play"></span>
+            <span class="mini-eq" id="mini-eq"><i></i><i></i><i></i></span>
+          </div>
+          <div class="mini-copy">
+            <span class="mini-title" id="mini-title">Nothing yet</span>
+            <span class="mini-sub" id="mini-sub">Paste a link to start</span>
+          </div>
+        </div>
+
+        <div class="side-spacer"></div>
+
+        <button class="side-prime" id="side-prime" type="button">
+          <span data-icon="zap"></span>
+          <span>Prime buffer</span>
+          <span class="side-prime-kbd">P</span>
+        </button>
+
+        <div class="side-footer">
+          <span class="dot green pulse"></span>
+          <div>
+            <b>Buffer engine online</b>
+            <span id="side-version">LagFree v1.0.0</span>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div class="crumbs">
+            <span class="crumb-root">LagFree</span>
+            <span class="crumb-sep" data-icon="chevron-right"></span>
+            <span class="crumb-current" id="crumb">Player</span>
+          </div>
+          <div class="top-actions">
+            <span class="top-status" id="top-status"><span class="dot" id="top-dot"></span><span id="top-status-text">Idle</span></span>
+            <button class="btn ghost icon" type="button" id="btn-help" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts"><span data-icon="keyboard"></span></button>
+            <button class="btn ghost icon" type="button" id="btn-open-yt" title="Open on YouTube" aria-label="Open on YouTube" disabled><span data-icon="external"></span></button>
+            <button class="btn primary top-settings" type="button" id="btn-top-settings"><span data-icon="settings"></span><span>Settings</span></button>
+          </div>
+        </header>
+
+        <div class="views" id="views">
+          <section class="view" data-view="player" id="view-player">
+            <div class="stage" id="stage" data-state="empty">
+              <div class="iframe-layer" id="iframe-layer"></div>
+
+              <div class="empty-stage" id="empty-stage">
+                <div class="empty-mark" data-icon="logo"></div>
+                <span class="eyebrow accent">LIGHTWEIGHT YOUTUBE PLAYER</span>
+                <h1>Smooth playback.<br /><span>Zero clutter.</span></h1>
+                <p>Paste a link. LagFree pre-buffers the opening, then streams in a lean embed built for laptops that hate the full watch page.</p>
+                <form class="hero-form" id="hero-form">
+                  <span data-icon="link" aria-hidden="true"></span>
+                  <input id="hero-input" type="text" placeholder="Paste a YouTube link or video ID…" autocomplete="off" spellcheck="false" aria-label="YouTube link" />
+                  <button type="submit" class="btn primary" id="hero-play" disabled><span>Play</span><span data-icon="arrow-right"></span></button>
+                </form>
+                <div class="hero-meta">
+                  <span><span data-icon="zap"></span>Pre-buffered start</span>
+                  <span><span data-icon="cpu"></span>H.264 boost</span>
+                  <span><span data-icon="gauge"></span>Lag guard</span>
+                </div>
+              </div>
+
+              <div class="prime-overlay" id="prime-overlay" hidden>
+                <div class="prime-card">
+                  <div class="prime-spinner">
+                    <span class="prime-ring"></span>
+                    <span class="prime-mark" data-icon="logo"></span>
+                  </div>
+                  <span class="eyebrow accent" id="prime-eyebrow">BUFFER ENGINE</span>
+                  <h2 id="prime-title">Building a buffer…</h2>
+                  <p id="prime-sub">Playing the opening seconds muted so your first click starts smooth.</p>
+                  <div class="prime-progress"><span id="prime-fill"></span></div>
+                  <div class="prime-meta"><span id="prime-elapsed">0.0s / 6s</span><span id="prime-ahead">0s ahead</span></div>
+                  <button class="btn ghost prime-skip" id="prime-skip" type="button">Skip pre-buffer</button>
+                </div>
+              </div>
+
+              <div class="stage-error" id="stage-error" hidden>
+                <div class="error-mark" data-icon="alert"></div>
+                <span class="eyebrow">PLAYBACK ERROR</span>
+                <h2 id="error-title">This video can’t play here</h2>
+                <p id="error-message">The video may be private, age-restricted, or embed-disabled.</p>
+                <div class="error-actions">
+                  <button class="btn subtle" type="button" id="error-retry"><span data-icon="refresh"></span>Try again</button>
+                  <button class="btn ghost" type="button" id="error-youtube"><span data-icon="external"></span>Open on YouTube</button>
+                </div>
+              </div>
+
+              <div class="stage-shade" aria-hidden="true"></div>
+              <div class="stage-top" id="stage-top">
+                <span class="stage-pill solid">LAGFREE</span>
+                <span class="stage-pill" id="stage-state-pill">IDLE</span>
+                <span class="stage-spacer"></span>
+                <span class="stage-pill" id="stage-quality">—</span>
+                <span class="stage-pill" id="stage-codec">H.264</span>
+              </div>
+
+              <div class="buffering-indicator" id="buffering" hidden><span class="spinner"></span><span>Buffering</span></div>
+
+              <button class="center-play" id="center-play" type="button" hidden>
+                <span class="center-circle"><span data-icon="play" id="center-icon"></span></span>
+                <span class="center-label" id="center-label">Play buffered video</span>
+              </button>
+
+              <div class="controls" id="controls">
+                <div class="seek" id="seek" role="slider" tabindex="0" aria-label="Seek" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                  <div class="seek-rail">
+                    <div class="seek-buffer" id="seek-buffer"></div>
+                    <div class="seek-played" id="seek-played"></div>
+                  </div>
+                  <div class="seek-thumb" id="seek-thumb"></div>
+                  <div class="seek-tip" id="seek-tip">0:00</div>
+                </div>
+                <div class="control-row">
+                  <button class="ctrl primary-ctrl" id="btn-play" type="button" title="Play / pause (Space)" aria-label="Play">
+                    <span data-icon="play" id="play-icon"></span>
+                  </button>
+                  <button class="ctrl" id="btn-back" type="button" title="Back 10 seconds (J)" aria-label="Back 10 seconds"><span data-icon="skip-back"></span></button>
+                  <button class="ctrl" id="btn-forward" type="button" title="Forward 10 seconds (L)" aria-label="Forward 10 seconds"><span data-icon="skip-forward"></span></button>
+                  <div class="volume-wrap">
+                    <button class="ctrl" id="btn-mute" type="button" title="Mute (M)" aria-label="Mute"><span data-icon="volume" id="volume-icon"></span></button>
+                    <div class="volume" id="volume" role="slider" tabindex="0" aria-label="Volume" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+                      <div class="volume-rail"><span id="volume-fill"></span></div>
+                      <span class="volume-thumb" id="volume-thumb"></span>
+                    </div>
+                  </div>
+                  <div class="time"><b id="time-current">0:00</b><span>/</span><span id="time-duration">0:00</span></div>
+                  <div class="control-spacer"></div>
+                  <span class="buffer-chip" id="buffer-chip"><span class="dot green"></span><span id="buffer-chip-text">Buffered 0s</span></span>
+                  <div class="quality-wrap">
+                    <button class="ctrl quality-btn" id="btn-quality" type="button" title="Quality" aria-haspopup="menu" aria-expanded="false">
+                      <span id="quality-label">720p</span>
+                      <span data-icon="chevron-down"></span>
+                    </button>
+                    <div class="menu" id="quality-menu" role="menu" hidden>
+                      <div class="menu-label">Playback quality</div>
+                      <button class="menu-item" type="button" data-quality="auto" role="menuitem"><span>Auto</span><small>Best available</small></button>
+                      <button class="menu-item" type="button" data-quality="hd1080" role="menuitem"><span>1080p</span><small>Sharp</small></button>
+                      <button class="menu-item" type="button" data-quality="hd720" role="menuitem"><span>720p</span><small>Recommended</small></button>
+                      <button class="menu-item" type="button" data-quality="large" role="menuitem"><span>480p</span><small>Data saver</small></button>
+                      <button class="menu-item" type="button" data-quality="medium" role="menuitem"><span>360p</span><small>Lightest</small></button>
+                    </div>
+                  </div>
+                  <button class="ctrl" id="btn-fullscreen" type="button" title="Fullscreen (F)" aria-label="Fullscreen"><span data-icon="maximize" id="fullscreen-icon"></span></button>
+                </div>
+              </div>
+            </div>
+
+            <div class="under-stage" id="under-stage" hidden>
+              <div class="now-row">
+                <div class="now-copy">
+                  <span class="eyebrow" id="now-eyebrow">NOW PLAYING</span>
+                  <h1 id="now-title">Nothing playing yet</h1>
+                  <p class="now-sub"><span id="now-author">Paste a YouTube link to begin</span><span class="sep">·</span><span id="now-id">—</span></p>
+                </div>
+                <div class="now-actions">
+                  <button class="btn subtle" type="button" id="btn-queue" disabled><span data-icon="plus"></span>Queue</button>
+                  <button class="btn ghost icon" type="button" id="btn-copy" title="Copy link" aria-label="Copy link" disabled><span data-icon="copy"></span></button>
+                  <button class="btn ghost icon" type="button" id="btn-open-yt-2" title="Open on YouTube" aria-label="Open on YouTube" disabled><span data-icon="external"></span></button>
+                  <button class="btn ghost icon" type="button" id="btn-reload" title="Reload video (R)" aria-label="Reload video" disabled><span data-icon="refresh"></span></button>
+                </div>
+              </div>
+              <div class="chips" id="chips">
+                <span class="chip" id="chip-quality"><span data-icon="film"></span><span>720p</span></span>
+                <span class="chip" id="chip-codec"><span data-icon="cpu"></span><span>H.264 boost</span></span>
+                <span class="chip" id="chip-buffer"><span data-icon="zap"></span><span>Pre-buffer 6s</span></span>
+                <span class="chip" id="chip-guard"><span data-icon="shield"></span><span>Lag guard on</span></span>
+              </div>
+            </div>
+
+            <div class="up-next" id="up-next" hidden>
+              <span class="upnext-label">UP NEXT</span>
+              <img class="upnext-thumb" id="up-next-thumb" alt="" />
+              <div class="upnext-copy"><b id="up-next-title"></b><span id="up-next-sub"></span></div>
+              <button class="btn subtle" type="button" id="up-next-play">Play now</button>
+            </div>
+          </section>
+
+          <section class="view" data-view="queue" id="view-queue" hidden>
+            <div class="view-head">
+              <div>
+                <span class="eyebrow accent">LIBRARY</span>
+                <h1>Queue</h1>
+                <p>Line up videos and let the buffer engine do its thing. Top plays first.</p>
+              </div>
+              <button class="btn ghost" type="button" id="queue-clear"><span data-icon="trash"></span>Clear queue</button>
+            </div>
+            <form class="add-form" id="queue-form">
+              <span data-icon="link" aria-hidden="true"></span>
+              <input id="queue-input" type="text" placeholder="Add a YouTube link to the queue…" autocomplete="off" spellcheck="false" aria-label="Add a YouTube link to the queue" />
+              <button class="btn primary" type="submit"><span data-icon="plus"></span>Add to queue</button>
+            </form>
+            <div class="media-list" id="queue-list"></div>
+          </section>
+
+          <section class="view" data-view="history" id="view-history" hidden>
+            <div class="view-head">
+              <div>
+                <span class="eyebrow accent">LIBRARY</span>
+                <h1>History</h1>
+                <p>Your last 60 videos. Stored locally in this browser, never uploaded anywhere.</p>
+              </div>
+              <button class="btn ghost" type="button" id="history-clear"><span data-icon="trash"></span>Clear history</button>
+            </div>
+            <div class="media-list" id="history-list"></div>
+          </section>
+
+          <section class="view" data-view="settings" id="view-settings" hidden>
+            <div class="view-head">
+              <div>
+                <span class="eyebrow accent">CONFIG</span>
+                <h1>Settings</h1>
+                <p>Everything is stored locally. Changes apply immediately or on the next reload.</p>
+              </div>
+              <button class="btn ghost" type="button" id="settings-reset"><span data-icon="refresh"></span>Reset defaults</button>
+            </div>
+
+            <div class="settings-grid">
+              <section class="card settings-card">
+                <div class="card-head">
+                  <div><h2>Playback</h2><p>How videos start</p></div>
+                  <span class="card-icon" data-icon="play"></span>
+                </div>
+                <label class="select-row">
+                  <span>Default quality</span>
+                  <select data-setting="quality">
+                    <option value="auto">Auto</option>
+                    <option value="hd1080">1080p</option>
+                    <option value="hd720">720p</option>
+                    <option value="large">480p</option>
+                    <option value="medium">360p</option>
+                  </select>
+                </label>
+                <label class="range-row">
+                  <span>Pre-buffer</span>
+                  <input type="range" min="0" max="15" step="1" data-setting="prebufferSeconds" />
+                  <b data-label-for="prebufferSeconds">6s</b>
+                </label>
+                <p class="row-note">Muted seconds played before you start. A small head start beats a spinning wheel.</p>
+                <label class="switch row-switch">
+                  <input type="checkbox" data-setting="autoPlayAfterBuffer" />
+                  <span class="track"></span>
+                  <span class="switch-label">Auto-play after buffering</span>
+                </label>
+                <label class="switch row-switch">
+                  <input type="checkbox" data-setting="startMuted" />
+                  <span class="track"></span>
+                  <span class="switch-label">Start muted</span>
+                </label>
+              </section>
+
+              <section class="card settings-card">
+                <div class="card-head">
+                  <div><h2>Performance</h2><p>For older CPUs and GPUs</p></div>
+                  <span class="card-icon" data-icon="gauge"></span>
+                </div>
+                <label class="switch row-switch">
+                  <input type="checkbox" data-setting="forceH264" />
+                  <span class="track"></span>
+                  <span class="switch-label">Force H.264</span>
+                </label>
+                <p class="row-note">H.264 decodes with less CPU than VP9/AV1 on many older machines. Reload a video to apply.</p>
+                <label class="switch row-switch">
+                  <input type="checkbox" data-setting="adaptiveQuality" />
+                  <span class="track"></span>
+                  <span class="switch-label">Adaptive quality</span>
+                </label>
+                <p class="row-note">When playback stalls, LagFree drops one quality step automatically.</p>
+                <label class="select-row">
+                  <span>Lag guard</span>
+                  <select data-setting="lagGuard">
+                    <option value="off">Off</option>
+                    <option value="balanced">Balanced</option>
+                    <option value="aggressive">Aggressive</option>
+                  </select>
+                </label>
+              </section>
+
+              <section class="card settings-card">
+                <div class="card-head">
+                  <div><h2>Interface</h2><p>Comfort</p></div>
+                  <span class="card-icon" data-icon="sparkles"></span>
+                </div>
+                <label class="switch row-switch">
+                  <input type="checkbox" data-setting="reduceMotion" />
+                  <span class="track"></span>
+                  <span class="switch-label">Reduce motion</span>
+                </label>
+                <p class="row-note">Turns off ambient animations and transitions.</p>
+                <label class="switch row-switch">
+                  <input type="checkbox" data-setting="rememberHistory" />
+                  <span class="track"></span>
+                  <span class="switch-label">Remember history</span>
+                </label>
+                <p class="row-note">Only video IDs, titles and timestamps, stored in this browser.</p>
+              </section>
+
+              <section class="card settings-card">
+                <div class="card-head">
+                  <div><h2>Local data</h2><p>You are in control</p></div>
+                  <span class="card-icon" data-icon="shield"></span>
+                </div>
+                <div class="data-actions">
+                  <button class="btn subtle" type="button" id="settings-clear-history"><span data-icon="trash"></span>Clear history</button>
+                  <button class="btn subtle" type="button" id="settings-clear-queue"><span data-icon="trash"></span>Clear queue</button>
+                </div>
+                <p class="row-note">LagFree never uploads history, queue or settings. There is no account and no server.</p>
+              </section>
+
+              <section class="card settings-card about-card">
+                <div class="about-mark" data-icon="logo"></div>
+                <div class="about-copy">
+                  <h2>LagFree Player <span id="about-version">v1.0.0</span></h2>
+                  <p>
+                    A lightweight shell around YouTube's official embedded player. It strips the heavy watch page, forces a
+                    lighter codec when asked, and pre-buffers the start. It does not download video files or bypass ads.
+                  </p>
+                  <p class="about-small">Built for slow laptops and impatient people. Not affiliated with YouTube.</p>
+                </div>
+              </section>
+            </div>
+          </section>
+        </div>
+
+        <footer class="statusbar">
+          <div class="status-left">
+            <span class="dot" id="status-dot"></span>
+            <span>Local player</span>
+            <span class="status-sep">/</span>
+            <span id="status-line">No video loaded</span>
+          </div>
+          <div class="status-right">
+            <span id="status-buffer">Buffer —</span>
+            <span class="status-sep">/</span>
+            <span id="status-quality">—</span>
+            <span class="status-sep">/</span>
+            <span id="status-clock">—</span>
+          </div>
+        </footer>
+      </main>
+
+      <aside class="inspector" aria-label="Session engine">
+        <div class="inspector-head"><span>Session</span><span class="live-pill"><span class="dot green pulse"></span>LIVE</span></div>
+
+        <section class="card engine-card">
+          <div class="card-head">
+            <div><h2>Buffer engine</h2><p>Priming beats stalling</p></div>
+            <span class="engine-pill" id="engine-status"><span class="dot" id="engine-dot"></span><span id="engine-status-text">Idle</span></span>
+          </div>
+          <div class="engine-score">
+            <strong><span id="engine-ahead">0</span><small>s</small></strong>
+            <span>ahead of the playhead</span>
+          </div>
+          <div class="meter"><span id="engine-meter"></span></div>
+          <div class="meter-scale"><span>0s</span><span>30s+</span></div>
+          <div class="stat-grid">
+            <div><span>Loaded</span><b id="insp-loaded">0%</b></div>
+            <div><span>Quality</span><b id="insp-quality">—</b></div>
+            <div><span>Stalls</span><b id="insp-stalls">0</b></div>
+            <div><span>Codec</span><b id="insp-codec">H.264</b></div>
+          </div>
+          <label class="range-row compact">
+            <span>Pre-buffer</span>
+            <input type="range" min="0" max="15" step="1" data-setting="prebufferSeconds" />
+            <b data-label-for="prebufferSeconds">6s</b>
+          </label>
+          <div class="engine-actions">
+            <button class="btn subtle" type="button" id="btn-prime"><span data-icon="zap"></span>Prime now</button>
+            <button class="btn ghost icon" type="button" id="btn-reload-2" title="Reload video" aria-label="Reload video"><span data-icon="refresh"></span></button>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head"><div><h2>Quick settings</h2><p>Applied on the fly</p></div></div>
+          <label class="switch row-switch">
+            <input type="checkbox" data-setting="forceH264" />
+            <span class="track"></span>
+            <span class="switch-label">Force H.264</span>
+          </label>
+          <label class="switch row-switch">
+            <input type="checkbox" data-setting="adaptiveQuality" />
+            <span class="track"></span>
+            <span class="switch-label">Adaptive quality</span>
+          </label>
+          <label class="select-row">
+            <span>Quality cap</span>
+            <select data-setting="quality">
+              <option value="auto">Auto</option>
+              <option value="hd1080">1080p</option>
+              <option value="hd720">720p</option>
+              <option value="large">480p</option>
+              <option value="medium">360p</option>
+            </select>
+          </label>
+        </section>
+
+        <section class="card shortcuts-card">
+          <div class="card-head"><div><h2>Shortcuts</h2><p>No mouse needed</p></div><span class="card-icon" data-icon="keyboard"></span></div>
+          <div class="shortcut-grid">
+            <span>Play / pause</span><kbd>Space</kbd>
+            <span>Seek ±5s</span><kbd>← →</kbd>
+            <span>Volume</span><kbd>↑ ↓</kbd>
+            <span>Fullscreen</span><kbd>F</kbd>
+          </div>
+          <button class="text-link" type="button" id="btn-shortcuts">All shortcuts <span data-icon="chevron-right"></span></button>
+        </section>
+      </aside>
+    </div>
+
+    <div class="toasts" id="toasts" aria-live="polite"></div>
+
+    <div class="modal" id="shortcuts-modal" hidden>
+      <div class="modal-scrim" data-close-modal></div>
+      <div class="modal-card shortcuts-modal">
+        <header class="modal-head">
+          <div><span class="eyebrow accent">KEYBOARD</span><h2>Shortcuts</h2></div>
+          <button class="btn ghost icon" type="button" data-close-modal aria-label="Close"><span data-icon="x"></span></button>
+        </header>
+        <div class="shortcut-list">
+          <div><span>Play / pause</span><span><kbd>Space</kbd><kbd>K</kbd></span></div>
+          <div><span>Seek back / forward</span><span><kbd>←</kbd><kbd>→</kbd></span></div>
+          <div><span>Seek 10 seconds</span><span><kbd>J</kbd><kbd>L</kbd></span></div>
+          <div><span>Volume up / down</span><span><kbd>↑</kbd><kbd>↓</kbd></span></div>
+          <div><span>Mute</span><span><kbd>M</kbd></span></div>
+          <div><span>Fullscreen</span><span><kbd>F</kbd></span></div>
+          <div><span>Jump to percent</span><span><kbd>0</kbd>–<kbd>9</kbd></span></div>
+          <div><span>Prime buffer</span><span><kbd>P</kbd></span></div>
+          <div><span>Reload video</span><span><kbd>R</kbd></span></div>
+          <div><span>Open queue / history</span><span><kbd>Q</kbd><kbd>H</kbd></span></div>
+          <div><span>Shortcuts</span><span><kbd>?</kbd></span></div>
+        </div>
+        <p class="modal-note">Shortcuts are paused while you are typing in a field.</p>
+      </div>
+    </div>
+
+    <div class="modal" id="confirm-modal" hidden>
+      <div class="modal-scrim" data-confirm="cancel"></div>
+      <div class="modal-card confirm-modal">
+        <h2 id="confirm-title">Are you sure?</h2>
+        <p id="confirm-message"></p>
+        <div class="confirm-actions">
+          <button class="btn subtle" type="button" id="confirm-cancel">Cancel</button>
+          <button class="btn primary" type="button" id="confirm-ok">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="player.js"></script>
+  </body>
+</html>

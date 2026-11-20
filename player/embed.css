@@ -1,0 +1,36 @@
+/*
+ * The embed page is a YouTube document, so our player UI lives in the parent
+ * extension page. These rules remove the embed's own top chrome, title, pause
+ * related-video wall and end screen so the custom controls are the only UI.
+ * Ad UI is deliberately left alone so skip buttons remain clickable.
+ */
+html.lagfree-embed .ytp-chrome-top,
+html.lagfree-embed .ytp-gradient-top,
+html.lagfree-embed .ytp-title,
+html.lagfree-embed .ytp-pause-overlay,
+html.lagfree-embed .ytp-endscreen-content,
+html.lagfree-embed .ytp-ce-element,
+html.lagfree-embed .ytp-cards-teaser,
+html.lagfree-embed .ytp-scroll-min,
+html.lagfree-embed .ytp-watermark,
+html.lagfree-embed .ytp-large-play-button {
+  display: none !important;
+}
+
+
+/* Newer embed player chrome (2026) */
+html.lagfree-embed .player-controls-top,
+html.lagfree-embed .player-controls-middle,
+html.lagfree-embed .fullscreen-action-menu,
+html.lagfree-embed .fullscreen-controls,
+html.lagfree-embed .player-controls-background-container,
+html.lagfree-embed .player-controls-background,
+html.lagfree-embed .ytmVideoInfoHost {
+  display: none !important;
+}
+
+/* Keep the ad UI visible if YouTube marks the player as showing an ad. */
+html.lagfree-embed .ad-showing .player-controls-top,
+html.lagfree-embed .ad-showing .player-controls-middle {
+  display: flex !important;
+}

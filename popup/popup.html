@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>LagFree</title>
+    <link rel="icon" href="../icons/icon32.png" />
+    <link rel="stylesheet" href="../shared/theme.css" />
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="ambient ambient-a" aria-hidden="true"></div>
+    <div class="ambient ambient-b" aria-hidden="true"></div>
+
+    <div class="popup">
+      <header class="head">
+        <div class="brand">
+          <span class="brand-mark" data-icon="logo" aria-hidden="true"></span>
+          <div class="brand-copy">
+            <div class="brand-line">
+              <strong>LagFree</strong>
+              <span class="brand-tag">PLAYER</span>
+            </div>
+            <span class="tagline">Smooth YouTube, zero clutter</span>
+          </div>
+        </div>
+        <div class="status" id="status">
+          <span class="dot green pulse" id="status-dot"></span>
+          <span id="status-text">Ready</span>
+        </div>
+      </header>
+
+      <main class="content" id="content" aria-live="polite"></main>
+
+      <footer class="foot">
+        <div class="toggles">
+          <label class="switch" title="Force the lighter H.264 codec where possible">
+            <input type="checkbox" id="toggle-h264" />
+            <span class="track"></span>
+            <span class="switch-label">H.264 boost</span>
+          </label>
+          <label class="switch" title="Automatically lower quality if playback starts to stutter">
+            <input type="checkbox" id="toggle-adaptive" />
+            <span class="track"></span>
+            <span class="switch-label">Adaptive</span>
+          </label>
+        </div>
+        <div class="foot-row">
+          <button type="button" class="link-btn" id="settings">
+            <span data-icon="settings" aria-hidden="true"></span>
+            Settings
+          </button>
+          <span class="version" id="version">v1.0.0</span>
+        </div>
+      </footer>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
