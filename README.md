@@ -1,4 +1,4 @@
-# LagFree — Smooth YouTube Player
+# LagFree — Smooth YouTube Player (AI generated)
 
 A Discord-dark Chrome/Brave extension that takes the video you are already watching and opens it in a lean, pre-buffered player page.
 
