@@ -6,7 +6,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXT_DIR="$(cd "$HERE/.." && pwd)"
 HOST_NAME="com.lagfree.downloader"
-VENV="${LAGFREE_VENV:-$HOME/.local/share/lagfree/venv}"
+VENV="${LAGFREE_VENV:-$HOME/lagfree-companion/venv}"
 EXTENSION_ID=""
 INSTALL_DEPS=1
 UNINSTALL=0
@@ -39,21 +39,53 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+HOST_DIRS=()
+add_host_dir() {
+  local candidate
+  [ -n "${1:-}" ] || return 0
+  [ -d "$(dirname "$1")" ] || return 0
+  candidate="$(realpath -m "$1")"
+  for existing in "${HOST_DIRS[@]:-}"; do
+    [ "$existing" = "$candidate" ] && return 0
+  done
+  HOST_DIRS+=("$candidate")
+}
+
+SNAP_BROWSER=0
 if [ "$(uname -s)" = "Darwin" ]; then
-  HOST_DIRS=(
-    "$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts"
-    "$HOME/Library/Application Support/Chromium/NativeMessagingHosts"
-    "$HOME/Library/Application Support/BraveSoftware/Brave-Browser/NativeMessagingHosts"
-    "$HOME/Library/Application Support/Microsoft Edge/NativeMessagingHosts"
-  )
+  add_host_dir "$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts"
+  add_host_dir "$HOME/Library/Application Support/Chromium/NativeMessagingHosts"
+  add_host_dir "$HOME/Library/Application Support/BraveSoftware/Brave-Browser/NativeMessagingHosts"
+  add_host_dir "$HOME/Library/Application Support/Microsoft Edge/NativeMessagingHosts"
 else
-  HOST_DIRS=(
-    "$HOME/.config/google-chrome/NativeMessagingHosts"
-    "$HOME/.config/google-chrome-beta/NativeMessagingHosts"
-    "$HOME/.config/chromium/NativeMessagingHosts"
-    "$HOME/.config/BraveSoftware/Brave-Browser/NativeMessagingHosts"
-    "$HOME/.config/microsoft-edge/NativeMessagingHosts"
-  )
+  add_host_dir "$HOME/.config/google-chrome/NativeMessagingHosts"
+  add_host_dir "$HOME/.config/google-chrome-beta/NativeMessagingHosts"
+  add_host_dir "$HOME/.config/chromium/NativeMessagingHosts"
+  add_host_dir "$HOME/.config/BraveSoftware/Brave-Browser/NativeMessagingHosts"
+  add_host_dir "$HOME/.config/microsoft-edge/NativeMessagingHosts"
+
+  # Snap browsers have their own $HOME under ~/snap/<name>/<revision>. Native
+  # messaging manifests must be inside that sandbox config, not ~/.config.
+  for base in "$HOME"/snap/brave/* "$HOME"/snap/brave/current; do
+    if [ -d "$base/.config/BraveSoftware/Brave-Browser" ]; then
+      add_host_dir "$base/.config/BraveSoftware/Brave-Browser/NativeMessagingHosts"
+      SNAP_BROWSER=1
+    fi
+  done
+  for base in "$HOME"/snap/chromium/* "$HOME"/snap/chromium/current; do
+    if [ -d "$base/.config/chromium" ]; then
+      add_host_dir "$base/.config/chromium/NativeMessagingHosts"
+      SNAP_BROWSER=1
+    fi
+  done
+
+  # Flatpak builds keep their config under ~/.var/app.
+  if [ -d "$HOME/.var/app/com.brave.Browser/config" ]; then
+    add_host_dir "$HOME/.var/app/com.brave.Browser/config/BraveSoftware/Brave-Browser/NativeMessagingHosts"
+  fi
+  if [ -d "$HOME/.var/app/org.chromium.Chromium/config" ]; then
+    add_host_dir "$HOME/.var/app/org.chromium.Chromium/config/chromium/NativeMessagingHosts"
+  fi
 fi
 
 if [ "$UNINSTALL" -eq 1 ]; then
@@ -98,7 +130,7 @@ if [ "$INSTALL_DEPS" -eq 1 ]; then
   fi
   echo "Installing/updating yt-dlp in $VENV"
   "$VENV/bin/python" -m pip install --quiet --upgrade pip
-  "$VENV/bin/python" -m pip install --quiet --upgrade yt-dlp
+  "$VENV/bin/python" -m pip install --quiet --upgrade yt-dlp imageio-ffmpeg
 fi
 
 if [ -x "$VENV/bin/python" ]; then
@@ -107,11 +139,20 @@ import yt_dlp
 print(yt_dlp.version.__version__)
 PY
 )"
+  IMAGEIO_FFMPEG="$("$VENV/bin/python" - <<'PY' 2>/dev/null || true
+import imageio_ffmpeg
+print(imageio_ffmpeg.get_ffmpeg_exe())
+PY
+)"
 else
   YTDLP_VERSION="missing"
+  IMAGEIO_FFMPEG=""
 fi
 
 FFMPEG_PATH="$(command -v ffmpeg || true)"
+if [ -z "$FFMPEG_PATH" ] && [ -n "$IMAGEIO_FFMPEG" ]; then
+  FFMPEG_PATH="$IMAGEIO_FFMPEG (helper)"
+fi
 
 "$PYTHON" - "$HOST_NAME" "$EXTENSION_ID" "$HERE/run.sh" "${HOST_DIRS[@]}" <<'PY'
 import json, os, pathlib, sys
@@ -139,8 +180,13 @@ echo "  Runner       : $HERE/run.sh"
 echo "  yt-dlp       : ${YTDLP_VERSION:-unknown}"
 echo "  ffmpeg       : ${FFMPEG_PATH:-NOT FOUND}"
 echo "  Output folder: $HOME/Downloads/LagFree"
+echo "  Helper ffmpeg: ${IMAGEIO_FFMPEG:-not installed}"
 echo
 if [ -z "$FFMPEG_PATH" ]; then
   echo "WARNING: ffmpeg was not found. Install it (e.g. sudo apt install ffmpeg) before downloading." >&2
+fi
+if [ "$SNAP_BROWSER" -eq 1 ]; then
+  echo "Snap browser detected: manifests were also installed inside its sandbox config."
+  echo "Fully quit and restart the browser (not just reload) so it picks them up."
 fi
 echo "Reload the extension from chrome://extensions (or brave://extensions) and reopen the player."

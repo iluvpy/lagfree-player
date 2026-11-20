@@ -32,10 +32,18 @@ except Exception as exc:  # pragma: no cover - reported through ping/start
 else:
     YTDLP_IMPORT_ERROR = ""
 
-HOST_VERSION = "1.0.0"
+HOST_VERSION = "1.0.1"
 HOST_NAME = "com.lagfree.downloader"
 MAX_MESSAGE = 1024 * 1024
-OUTPUT_DIR = Path.home() / "Downloads" / "LagFree"
+REAL_HOME = Path(
+    os.environ.get("LAGFREE_REAL_HOME")
+    or os.environ.get("SNAP_REAL_HOME")
+    or str(Path.home())
+).expanduser()
+OUTPUT_DIR = Path(
+    os.environ.get("LAGFREE_OUTPUT_DIR") or (REAL_HOME / "Downloads" / "LagFree")
+).expanduser()
+CACHE_DIR = REAL_HOME / "lagfree-companion" / "cache"
 JOB_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
 QUALITIES = {"720", "1080", "best", "audio"}
 
@@ -105,8 +113,15 @@ def ytdlp_version():
     return getattr(getattr(yt_dlp, "version", None), "__version__", None)
 
 
+def find_ffmpeg():
+    configured = os.environ.get("LAGFREE_FFMPEG")
+    if configured and Path(configured).is_file():
+        return configured
+    return shutil.which("ffmpeg")
+
+
 def tool_state():
-    ffmpeg = shutil.which("ffmpeg")
+    ffmpeg = find_ffmpeg()
     return {
         "version": HOST_VERSION,
         "ytdlp": ytdlp_version(),
@@ -278,12 +293,13 @@ def run_job(message, cancel_event):
         finish(1, 0.1)
         return
 
-    if not shutil.which("ffmpeg"):
+    ffmpeg_path = find_ffmpeg()
+    if not ffmpeg_path:
         send(
             {
                 "type": "error",
                 "jobId": job_id,
-                "error": "ffmpeg is not installed. Install ffmpeg, then try again.",
+                "error": "ffmpeg is not available. Re-run companion/setup.sh, then try again.",
                 "code": "missing-ffmpeg",
             }
         )
@@ -371,7 +387,8 @@ def run_job(message, cancel_event):
         "continuedl": True,
         "overwrites": False,
         "nocheckcertificate": False,
-        "cachedir": str(Path.home() / ".cache" / "lagfree" / "yt-dlp"),
+        "cachedir": str(CACHE_DIR / "yt-dlp"),
+        "ffmpeg_location": ffmpeg_path,
     }
     if merge_format:
         options["merge_output_format"] = merge_format
@@ -455,7 +472,7 @@ def run_job(message, cancel_event):
 def open_folder(path_value):
     try:
         path = Path(path_value).expanduser().resolve()
-        home = Path.home().resolve()
+        home = REAL_HOME.resolve()
         if home not in path.parents and path != home:
             raise ValueError("Folder is outside the home directory.")
         target = path if path.is_dir() else path.parent

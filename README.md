@@ -12,8 +12,8 @@ The popup detects the current YouTube video. **Open LagFree Player** loads it in
 
 1. Open `chrome://extensions` (Brave: `brave://extensions`).
 2. Enable **Developer mode** (top-right).
-3. Click **Load unpacked** and choose:
-   `~/my_extensions/lagfree-player`
+3. Click **Load unpacked** and choose the folder you copied the extension to
+   (for example `~/my-extensions/lagfree` or `~/my_extensions/lagfree-player`).
 4. Pin **LagFree** to the toolbar.
 5. Open any YouTube video, click the LagFree icon, then **Open LagFree Player**.
 
@@ -29,8 +29,18 @@ Downloads require a small local helper. It uses **yt-dlp** and **ffmpeg**, runs 
 
 Requirements: Python 3 and ffmpeg. The script installs/updates yt-dlp in its own venv.
 
+Run the script **from the folder you loaded as the extension**:
+
 ```bash
-bash ~/my_extensions/lagfree-player/companion/setup.sh
+cd /path/to/lagfree
+bash companion/setup.sh
+```
+
+For example, if you loaded the extension from `~/my-extensions/lagfree`:
+
+```bash
+cd ~/my-extensions/lagfree
+bash companion/setup.sh
 ```
 
 Then reload LagFree from `chrome://extensions` / `brave://extensions`. If the helper still is not found, restart the browser once so it picks up the new native-host manifest.
@@ -40,7 +50,7 @@ The setup script:
 - creates `~/.local/share/lagfree/venv` and installs the latest `yt-dlp`;
 - checks for `ffmpeg` and warns if it is missing;
 - makes the helper executable;
-- writes native-messaging manifests for Chrome, Chromium, Brave and Edge under your user config;
+- writes native-messaging manifests for Chrome, Chromium, Brave and Edge under your user config, including the sandboxed config used by **Snap Brave**;
 - computes the extension ID from this folder automatically (override with `--extension-id ID` if needed).
 
 To remove the native-host registration later:
@@ -51,6 +61,8 @@ bash ~/my_extensions/lagfree-player/companion/setup.sh --uninstall
 
 Files already downloaded are not touched.
 
+> Snap Brave and Snap Chromium keep their config inside `~/snap/...`; the script detects this automatically. After setup, **fully quit and restart Brave** — a tab reload is not enough for native-host registration.
+>
 > The setup script covers Linux and macOS. A Windows install would additionally need the native host registered in the registry.
 
 ---
@@ -120,6 +132,7 @@ The helper is **not** a server. It is a native messaging process launched by the
 | --- | --- |
 | “Helper not installed” | Run `bash ~/my_extensions/lagfree-player/companion/setup.sh`, reload the extension, then restart the browser if needed. |
 | Extension id forbidden | You moved the extension or loaded a different copy. Re-run setup from the current folder, or pass `--extension-id ID`. |
+| Snap Brave says helper not installed | Snap keeps config in `~/snap/brave/<revision>/.config/...`. Re-run this version of setup and **restart Brave**; the script installs the manifest there. |
 | ffmpeg missing | Install it (e.g. `sudo apt install ffmpeg`) and click **Check helper**. |
 | yt-dlp too old | Re-run setup; it updates the venv. |
 | Download fails | Read the error in Downloads. Retry; for unavailable/private videos, open on YouTube. |
@@ -166,4 +179,4 @@ icons/                 toolbar icons
 
 Bundled font: **Inter** (SIL Open Font License 1.1). See `shared/INTER-LICENSE.txt`.
 
-Version 1.1.0 — not affiliated with YouTube or Google.
+Version 1.1.1 — not affiliated with YouTube or Google.

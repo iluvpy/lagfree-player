@@ -150,6 +150,7 @@ const el = {
   helperPillText: $("helper-pill-text"),
   helperText: $("helper-text"),
   helperCommand: $("helper-command"),
+  helperCommandCode: $("helper-command-code"),
   helperTest: $("helper-test"),
   helperCopy: $("helper-copy"),
   settingsHelper: $("settings-helper"),
@@ -2213,13 +2214,13 @@ function updateHelperUI() {
     el.helperText.textContent = `Local downloads are ready · ${version} · ${ffmpeg}. Output: ~/Downloads/LagFree.`;
     el.helperCommand.hidden = true;
   } else if (missing) {
-    el.helperText.textContent = helper.error || "The local helper is not installed or not reachable. Run the setup command once, then check again.";
+    el.helperText.textContent = `${helper.error || "The local helper is not installed or not reachable."} Run the setup command from the folder you loaded in brave://extensions, then check again.`;
     el.helperCommand.hidden = false;
   } else if (status === "checking") {
     el.helperText.textContent = "Checking the local yt-dlp + ffmpeg helper…";
     el.helperCommand.hidden = false;
   } else {
-    el.helperText.textContent = "Downloads use a local yt-dlp + ffmpeg helper. It runs on this computer only and never uploads anything.";
+    el.helperText.textContent = "Downloads use a local yt-dlp + ffmpeg helper. Run companion/setup.sh from this extension's folder once; it only runs on this computer.";
     el.helperCommand.hidden = false;
   }
 
@@ -2288,11 +2289,18 @@ async function checkDownloader({ force = false, notify = false } = {}) {
 }
 
 function setupCommand() {
-  return "bash ~/my_extensions/lagfree-player/companion/setup.sh";
+  let id = "";
+  try {
+    id = chrome.runtime?.id || "";
+  } catch {
+    /* ignore */
+  }
+  return `bash companion/setup.sh${id ? ` --extension-id ${id}` : ""}`;
 }
 
 function copySetupCommand() {
-  void copyText(setupCommand(), "Setup command copied");
+  if (el.helperCommandCode) el.helperCommandCode.textContent = setupCommand();
+  void copyText(setupCommand(), "Command copied — run it from the LagFree folder");
 }
 
 /* ================================================================== */
